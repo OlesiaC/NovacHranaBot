@@ -1,0 +1,10 @@
+services:
+  budget-bot:
+    build: .
+    container_name: budget-bot
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    command: ["python", "bot.py"]

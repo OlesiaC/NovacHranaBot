@@ -1,10 +1,23 @@
+# Docker-friendly setup with environment variables
+# 1. BOT_TOKEN хранится в .env (или передаётся через Docker ENV)
+# 2. В Dockerfile подключаем .env через docker-compose или -e BOT_TOKEN="..."
+
+import os
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
+from dotenv import load_dotenv
 
-# Данные храним в памяти
-chats_data = {}  # { chat_id: { "budget": float, "spent_total": float, "users": { user_id: {"name": str, "spent": float} } } }
+# Загружаем переменные окружения (.env для локальной разработки)
+load_dotenv()
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    raise ValueError("BOT_TOKEN is not set! Добавь его в .env или передай через Docker ENV.")
+
+# Хранилище данных в памяти
+chats_data = {}
+
+async def start(update: Update, _):
     await update.message.reply_text(
         "Привет! Я бот для контроля бюджета.\n\n"
         "Команды:\n"
@@ -15,7 +28,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Чтобы добавить трату, просто отправь число."
     )
 
-async def set_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def set_budget(update: Update, context):
     if len(context.args) == 0:
         await update.message.reply_text("Укажи сумму: /set_budget 10000")
         return
@@ -31,11 +44,11 @@ async def set_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ Бюджет установлен: {amount}")
 
-async def add_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_expense(update: Update, _):
     try:
         amount = float(update.message.text)
     except ValueError:
-        return  # Игнорируем текст, который не является числом
+        return
 
     chat_id = update.message.chat_id
     user_id = update.message.from_user.id
@@ -45,7 +58,6 @@ async def add_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Сначала установи бюджет командой /set_budget")
         return
 
-    # Обновляем траты
     chats_data[chat_id]["spent_total"] += amount
     if user_id not in chats_data[chat_id]["users"]:
         chats_data[chat_id]["users"][user_id] = {"name": user_name, "spent": 0}
@@ -53,12 +65,9 @@ async def add_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     remaining = chats_data[chat_id]["budget"] - chats_data[chat_id]["spent_total"]
 
-    await update.message.reply_text(
-        f"✅ {user_name} добавил трату {amount}\n"
-        f"Остаток бюджета: {remaining}"
-    )
+    await update.message.reply_text(f"✅ {user_name} добавил трату {amount}\nОстаток бюджета: {remaining}")
 
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def status(update: Update, _):
     chat_id = update.message.chat_id
     if chat_id not in chats_data:
         await update.message.reply_text("Бюджет не установлен.")
@@ -77,7 +86,7 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(text)
 
-async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def top(update: Update, _):
     chat_id = update.message.chat_id
     if chat_id not in chats_data or not chats_data[chat_id]["users"]:
         await update.message.reply_text("Нет данных по тратам.")
@@ -90,12 +99,13 @@ async def top(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(text)
 
-async def reset_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def reset_budget(update: Update, _):
     chat_id = update.message.chat_id
     chats_data[chat_id] = {"budget": 0, "spent_total": 0, "users": {}}
     await update.message.reply_text("✅ Бюджет сброшен!")
 
-app = ApplicationBuilder().token("8220413192:AAGupQhhdCxuZmrEwTHkOHjg2v9QcEkxDrU").build()
+# Создаём приложение
+app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("set_budget", set_budget))
 app.add_handler(CommandHandler("status", status))
@@ -103,5 +113,5 @@ app.add_handler(CommandHandler("top", top))
 app.add_handler(CommandHandler("reset_budget", reset_budget))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense))
 
-print("✅ Бот запущен! Ждёт команды...")  # <-- добавили
+print("✅ Бот запущен! Ждёт команды...")
 app.run_polling()
