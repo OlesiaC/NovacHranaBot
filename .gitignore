@@ -1,0 +1,28 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# UV cache
+.uv/
+
+# PyCharm project settings
+.idea/
+*.iml
+
+# Docker logs
+*.log
+
+# macOS system files
+.DS_Store
+
+# SQLite database (если будешь использовать)
+*.db
+
+# Environment variables (если добавишь)
+.env
